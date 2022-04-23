@@ -32,7 +32,7 @@ jobs:
           pip3 show ansible
           ls -l $HOME/.local/bin || true
           ansible --version
-          { echo '[mde]'; echo 'localhost connection=local'; } > inventory
+          { echo '[mde]'; echo 'localhost ansible_connection=local'; } > inventory
           { echo '[defaults]'; echo 'callbacks_enabled = profile_tasks, timer'; echo 'roles_path = ../'; echo 'ansible_python_interpreter: /usr/bin/python3'; } >> ansible.cfg
       - name: Environment
         run: |
