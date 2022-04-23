@@ -1,0 +1,478 @@
+---
+
+- name: Validate MDE deployments
+  hosts: mde
+  pre_tasks:
+    - name: Linux | Set fact
+      ansible.builtin.set_fact:
+        mde_dir: '/opt/microsoft/mdatp'
+        mde_mdatp_path: '/usr/bin/mdatp'
+        mde_mdatp_bin: '/opt/microsoft/mdatp/sbin/wdavdaemonclient'
+        mde_bin: '/opt/microsoft/mdatp/sbin/wdavdaemon'
+        mde_log1: '/var/log/microsoft/mdatp/microsoft_defender.log'
+        mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
+        mde_log3: '/var/log/microsoft/mdatp/microsoft_defender_core_err.log'
+        mde_log_user: root
+      when: ansible_system == "Linux"
+    - name: RedHat7 | Set fact
+      ansible.builtin.set_fact:
+        mde_log_user: mdatp
+      when: ansible_os_family == "RedHat" and ansible_distribution_major_version|int == 7
+    - name: Darwin | Set fact
+      ansible.builtin.set_fact:
+        mde_dir: '/opt/microsoft/mdatp'
+        mde_mdatp_bin: '/opt/microsoft/mdatp/sbin/wdavdaemonclient'
+        mde_bin: '/opt/microsoft/mdatp/sbin/wdavdaemon'
+        mde_log1: '/var/log/microsoft/mdatp/microsoft_defender.log'
+        mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
+        mde_log_user: root
+      when: ansible_os_family == "Darwin"
+    - name: Windows | Set fact
+      ansible.builtin.set_fact:
+        mde_dir: 'C:\Program Files\Windows Defender Advanced Threat Protection'
+        mde_bin: 'C:\Program Files\Windows Defender Advanced Threat Protection\MsSense.exe'
+      when: ansible_os_family == "Windows"
+  tasks:
+    - block:
+        - name: Collect packages information
+          ansible.builtin.package_facts:
+            manager: auto
+        - name: Ensure mdatp package is present
+          ansible.builtin.assert:
+            that: "'mdatp' in ansible_facts.packages"
+        - name: Ensure mdatp version above or equal
+          ansible.builtin.assert:
+            that: ansible_facts.packages['mdatp'][0]['version']|string is version_compare(mde_version, '>=')
+
+        - name: Get mdatp bin/symlink stats
+          ansible.builtin.stat:
+            path: "{{ mde_mdatp_path }}"
+          register: s_mdatp_path
+          failed_when: false
+        - name: Ensure mdatp bin/symlink exists
+          ansible.builtin.assert:
+            that:
+              - s_mdatp_path.stat.exists
+              - s_mdatp_path.stat.islnk
+              - s_mdatp_path.stat.pw_name == 'root'
+
+        - name: Health | Get selinux information
+          ansible.builtin.command: sestatus
+          register: selinux
+          changed_when: false
+          failed_when: false
+        - name: Health | Validate selinux state
+          ansible.builtin.assert:
+            that:
+              - "'SELinux status:                 enabled' in selinux.stdout"
+              - "'Loaded policy name:             targeted' in selinux.stdout"
+              # Enforcing fine only on RHEL/Centos8 by default. Extra config needed on 7.
+              - "'enforcing' in selinux.stdout"
+              - "'Error' not in selinux.stdout"
+              - not selinux.stderr|string
+          when:
+            - ansible_os_family == "RedHat"
+            - mde_selinux is not defined or mde_selinux|bool
+
+        - name: Configuration | Linux | Get mdatp auditd rules stats
+          ansible.builtin.stat:
+            path: /opt/microsoft/mdatp/conf/mdatp.rules
+          register: s_mdatp_rules
+          failed_when: false
+        - name: Configuration | Linux | Ensure mdatp audit rules file exists
+          ansible.builtin.assert:
+            that:
+              - s_mdatp_rules.stat.exists
+              - s_mdatp_rules.stat.mode == '0644'
+              - s_mdatp_rules.stat.pw_name == 'root'
+
+        - name: Configuration | Linux | Get mdatp auditd rules
+          ansible.builtin.command: cat /opt/microsoft/mdatp/conf/mdatp.rules
+          register: mdatp_rules
+          changed_when: false
+          failed_when: false
+        - name: Configuration | Linux | Validate mdatp auditd rules
+          ansible.builtin.assert:
+            that:
+              - "'Auditd rules for MDATP (EDR) audisp sensor' in mdatp_rules.stdout"
+              - "'-k mdatp' in mdatp_rules.stdout"
+              - "'-k mdatpmbr' in mdatp_rules.stdout"
+              - "'Error' not in mdatp_rules.stdout"
+              - not mdatp_rules.stderr|string
+
+        - name: Configuration | Linux | Get auditd active rules
+          ansible.builtin.command: auditctl -l
+          register: auditctl
+          changed_when: false
+          failed_when: false
+          become: true
+        - name: Configuration | Linux | Validate auditd active rules include mdatp
+          ansible.builtin.assert:
+            that:
+              - "'key=mdatp' in auditctl.stdout"
+              - "'Error' not in auditctl.stdout"
+              - not auditctl.stderr|string
+
+        - name: Logs | Linux | Get microsoft_defender_core_err.log
+          ansible.builtin.stat:
+            path: "{{ mde_log3 }}"
+          register: s_log3
+          failed_when: false
+        - name: Logs | Linux | Validate microsoft_defender_core_err.log
+          ansible.builtin.assert:
+            that:
+              - s_log3.stat.exists
+              - s_log3.stat.mode == '0660'
+              - s_log3.stat.pw_name == 'root'
+
+        - name: Logs | Linux | Get microsoft_defender_core_err.log content
+          ansible.builtin.command: "cat {{ mde_log3 }}"
+          register: log3
+          changed_when: false
+          failed_when: false
+          become: yes
+        - name: Logs | Linux | Validate microsoft_defender_core_err.log content
+          ansible.builtin.assert:
+            that:
+              - "'auditd_manager: Cloud exclusions won\\'t be applied, because auditd is in lockdown mode. Restart required.' not in log3.stdout"
+              # often appearing. adjust as needed
+              # - "'Error connecting to server socket' in log3.stdout"
+              # - "'Error' not in log3.stdout"
+              # - "'warning' not in log3.stdout"
+              # - "'[warning]: [event<ipc_filesystem_message, EdrOpenMessages>]: Dropped messages: ' not in log3.stdout"
+              - not log3.stderr|string
+
+      when: ansible_system == "Linux"
+
+    - block:
+        - name: Get directory stats
+          ansible.builtin.stat:
+            path: "{{ mde_dir }}"
+          register: s_dir
+        - name: Ensure mdatp directory exists
+          ansible.builtin.assert:
+            that:
+              - s_dir.stat.exists
+              - s_dir.stat.isdir
+
+        - name: Get mdatp bin stats
+          ansible.builtin.stat:
+            path: "{{ mde_mdatp_bin }}"
+          register: s_mdatp_bin
+        - name: Ensure mdatp bin exists
+          ansible.builtin.assert:
+            that:
+              - s_mdatp_bin.stat.exists
+              - s_mdatp_bin.stat.mode == '0755'
+              - s_mdatp_bin.stat.pw_name == 'root'
+
+        - name: Get mdatp daemon stats
+          ansible.builtin.stat:
+            path: "{{ mde_bin }}"
+          register: s_mde_bin
+        - name: Ensure mdatp daemon exists
+          ansible.builtin.assert:
+            that:
+              - s_mde_bin.stat.exists
+              - s_mde_bin.stat.mode == '0755'
+              - s_mde_bin.stat.pw_name == 'root'
+
+        - name: Populate service facts
+          ansible.builtin.service_facts:
+
+        - name: Validate mdatp service enabled and started
+          ansible.builtin.assert:
+            that:
+              - ansible_facts.services['mdatp.service']['state'] == 'running'
+              - ansible_facts.services['mdatp.service']['status'] == 'enabled'
+
+        - name: Get wdavdaemon(root) process
+          ansible.builtin.command: pgrep -u root wdavdaemon
+          register: ps1
+          changed_when: false
+          failed_when: false
+        - name: Validate wdavdaemon(root) process is running
+          ansible.builtin.assert:
+            that: ps1.stdout
+
+        - name: Get wdavdaemon(mdatp) process
+          ansible.builtin.command: pgrep -u mdatp wdavdaemon
+          register: ps2
+          changed_when: false
+          failed_when: false
+        - name: Validate wdavdaemon(mdatp) process is running
+          ansible.builtin.assert:
+            that: ps2.stdout
+
+        - name: Configuration | Get org_id
+          ansible.builtin.command: mdatp health --field org_id
+          register: org_id
+          changed_when: false
+          failed_when: false
+          timeout: 15
+        - name: Configuration | Validate org_id
+          ansible.builtin.assert:
+            that:
+              - mde_org_id in org_id.stdout
+              - "'Error' not in org_id.stdout"
+              - not org_id.stderr|string
+          when: mde_org_id|string
+
+        - name: Configuration | Linux | Get managed json stats
+          ansible.builtin.stat:
+            path: /etc/opt/microsoft/mdatp/managed/mdatp_managed.json
+          register: s_managed_json
+          failed_when: false
+        - name: Configuration | Linux | Ensure mdatp bin/symlink exists
+          ansible.builtin.assert:
+            that:
+              - s_managed_json.stat.exists
+              - s_managed_json.stat.mode == '0644'
+              - s_managed_json.stat.pw_name == 'root'
+          when:
+            - ansible_system == "Linux"
+            - mde_tags|string or mde_proxy_host|string or mde_managed|bool
+
+        - name: Configuration | Linux | Check managed json is valid json
+          ansible.builtin.command: python -m json.tool /etc/opt/microsoft/mdatp/managed/mdatp_managed.json
+          register: managed_json_valid
+          changed_when: false
+          failed_when: false
+        - name: Configuration | Linux | Validate json format
+          ansible.builtin.assert:
+            that:
+              - "'Error' not in managed_json_valid.stdout"
+              - not managed_json_valid.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_tags|string or mde_proxy_host|string or mde_managed|bool
+
+        - name: Configuration | Linux | Get managed json file
+          ansible.builtin.command: cat /etc/opt/microsoft/mdatp/managed/mdatp_managed.json
+          register: managed_json
+          changed_when: false
+          failed_when: false
+        - name: Configuration | Linux | Validate Tags
+          ansible.builtin.assert:
+            that:
+              - "'\"tags\": ' in managed_json.stdout"
+              - mde_tags in managed_json.stdout
+              - "'Error' not in managed_json.stdout"
+              - not managed_json.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_tags|string
+
+        - name: Configuration | Linux | Validate proxy
+          ansible.builtin.assert:
+            that:
+              - "'\"proxy\": \"http://{{ mde_proxy_host }}:{{ mde_proxy_port }}\"' in managed_json.stdout"
+              - "'Error' not in managed_json.stdout"
+              - not managed_json.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_proxy_host|string
+            - mde_proxy_port|string
+
+        - name: Configuration | Linux | Get systemd unit file
+          ansible.builtin.command: cat /usr/lib/systemd/system/mdatp.service
+          register: systemd
+          changed_when: false
+          failed_when: false
+        - name: Configuration | Linux | Validate Proxy in systemd unit file
+          ansible.builtin.assert:
+            that:
+              - "'Description=Microsoft Defender' in systemd.stdout"
+              - "'Environment=\"HTTPS_PROXY=http://{{ mde_proxy_host }}:{{ mde_proxy_port }}\"' in systemd.stdout"
+              - "'Error' not in systemd.stdout"
+              - not systemd.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_proxy_host|string
+            - mde_proxy_port|string
+
+        - name: Configuration | Get mdatp health
+          ansible.builtin.command: mdatp health
+          register: health1
+          changed_when: false
+          failed_when: false
+        - name: Configuration | Check if managed
+          ansible.builtin.assert:
+            that:
+              - "' [managed]' in health1.stdout"
+              - "'Error' not in health1.stdout"
+              - "'Could not connect to the daemon' not in health1.stdout"
+              - not health1.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_managed|bool
+
+        - name: Configuration | Check if passive mode is set at expected value
+          ansible.builtin.assert:
+            that:
+              - "('passive_mode_enabled                        : ' + mde_passive_mode_enabled|string|lower) in health1.stdout"
+              - "'Error' not in health1.stdout"
+              - not health1.stderr|string
+          when:
+            - ansible_system == "Linux"
+
+        - name: Configuration | Get mdatp health boolean
+          ansible.builtin.command: mdatp health --field healthy
+          register: health2
+          changed_when: false
+          failed_when: false
+        - name: Health | Check if healthy boolean
+          ansible.builtin.assert:
+            that:
+              - "'true' in health2.stdout"
+              - "'Error' not in health2.stdout"
+              - not health2.stderr|string
+          when:
+            - ansible_system == "Linux"
+            - mde_healthy
+
+        - name: Health | Check if healthy2
+          ansible.builtin.assert:
+            that:
+              - "'health_issues                               : []' in health1.stdout"
+              - "'Error' not in health1.stdout"
+              - not health1.stderr|string
+          when: mde_healthy
+
+        - name: Health | Check definitions update
+          ansible.builtin.assert:
+            that:
+              - "'definitions_updated_minutes_ago             :' in health1.stdout"
+              - "'definitions_status                          : \"up_to_date\"' in health1.stdout"
+              - "'Error' not in health1.stdout"
+              - not health1.stderr|string
+
+        - name: Health | Test network connectivity
+          ansible.builtin.command: mdatp connectivity test
+          register: net
+          changed_when: false
+          failed_when: false
+        - name: Health | Validate network connectivity
+          ansible.builtin.assert:
+            that:
+              - "'Testing connection' in net.stdout"
+              - "'OK' in net.stdout"
+              - "'Error' not in net.stdout"
+              - not net.stderr|string
+          when:
+            - ansible_system == "Linux"
+
+        - name: Logs | Get microsoft_defender.log
+          ansible.builtin.stat:
+            path: "{{ mde_log1 }}"
+          register: s_log1
+          failed_when: false
+        - name: Logs | Validate microsoft_defender.log
+          ansible.builtin.assert:
+            that:
+              - s_log1.stat.exists
+              - s_log1.stat.mode == '0660'
+              - s_log1.stat.pw_name == mde_log_user
+
+        - name: Logs | Get microsoft_defender_core.log
+          ansible.builtin.stat:
+            path: "{{ mde_log2 }}"
+          register: s_log2
+          failed_when: false
+        - name: Logs | Validate microsoft_defender_core.log
+          ansible.builtin.assert:
+            that:
+              - s_log2.stat.exists
+              - s_log2.stat.mode == '0660'
+              - s_log2.stat.pw_name == 'root'
+              # last modified time less than 15min old
+              - (s_log2.stat.mtime|int - (ansible_date_time.epoch|int - 900)) > 0
+
+      when: ansible_system == "Linux" or ansible_os_family == "Darwin"
+    - block:
+        - name: Win | Get directory stats
+          ansible.windows.win_stat:
+            path: "{{ mde_dir }}"
+          register: s_dir
+          failed_when: false
+        - name: Win | Ensure mdatp directory exists
+          ansible.builtin.assert:
+            that:
+              - s_dir.stat.exists
+              - s_dir.stat.isdir
+
+        - name: Win | Get mdatp daemon stats
+          ansible.windows.win_stat:
+            path: "{{ mde_bin }}"
+          register: s_mde_bin
+          failed_when: false
+        - name: Win | Ensure mdatp daemon exists
+          ansible.builtin.assert:
+            that:
+              - s_mde_bin.stat.exists
+
+        - name: Win | Get info for all installed services
+          ansible.windows.win_service_info:
+          register: service_info
+
+        - name: Win | Validate mdatp services are enabled and started
+          ansible.builtin.assert:
+            that:
+              - service_info.services['WinDefend']['state'] == 'started'
+              - service_info.services['WinDefend']['start_mode'] == 'auto'
+              - service_info.services['Sense']['state'] == 'started'
+              - service_info.services['Sense']['start_mode'] == 'auto'
+
+        - name: Configuration | MDE Onboarded
+          ansible.windows.win_reg_stat:
+            path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection\Status
+            name: OnboardingState
+          register: r_onboarding_state
+          failed_when: false
+        - name: Win | Ensure MDE Onboarded
+          ansible.builtin.assert:
+            that:
+              - r_onboarding_state.value == '1'
+          when:
+            - mde_healthy
+
+        - name: Configuration | MDE Org_id
+          ansible.windows.win_reg_stat:
+            path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection
+            name: OnboardingInfo
+          register: r_onboarding_info
+          failed_when: false
+        - name: Win | Ensure MDE on right org_id
+          ansible.builtin.assert:
+            that:
+              - "mde_org_id in r_onboarding_info.value"
+          when:
+            - mde_org_id|string
+
+        - name: Configuration | MDE Tags
+          ansible.windows.win_reg_stat:
+            path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection\DeviceTagging
+            name: Group
+          register: r_group
+          failed_when: false
+        - name: Win | Ensure MDE on right tags
+          ansible.builtin.assert:
+            that:
+              - "mde_tags in r_group.value"
+          when:
+            - mde_tags|string
+
+        - name: Configuration | MDE Passive mode
+          ansible.windows.win_reg_stat:
+            path: HKLM:\SOFTWARE\Policies\Microsoft\Windows Advanced Threat Protection
+            name: ForceDefenderPassiveMode
+          register: r_passive
+          failed_when: false
+        - name: Win | Ensure MDE passive mode as expected
+          ansible.builtin.assert:
+            that:
+              - r_passive.value == '1'
+          when:
+            - mde_passive_mode_enabled|bool
+
+      when: ansible_os_family == "Windows"

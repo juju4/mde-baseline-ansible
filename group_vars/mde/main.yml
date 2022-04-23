@@ -1,0 +1,10 @@
+---
+
+mde_org_id: ''
+mde_healthy: true
+mde_tags: ''
+mde_proxy_host: ''
+mde_proxy_port: ''
+mde_version: '101.62'
+mde_managed: false
+mde_passive_mode_enabled: false

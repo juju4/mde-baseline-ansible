@@ -1,0 +1,74 @@
+---
+name: ansible-play
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+    env:
+      ANSIBLE_CALLBACKS_ENABLED: profile_tasks
+      ANSIBLE_EXTRA_VARS: ''
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip
+          pip3 install ansible-lint flake8 yamllint
+          which ansible
+          pip3 install ansible
+          pip3 show ansible
+          ls -l $HOME/.local/bin || true
+          ansible --version
+          { echo '[mde]'; echo 'localhost connection=local'; } > inventory
+          { echo '[defaults]'; echo 'callbacks_enabled = profile_tasks, timer'; echo 'roles_path = ../'; echo 'ansible_python_interpreter: /usr/bin/python3'; } >> ansible.cfg
+      - name: Environment
+        run: |
+          set -x
+          pwd
+          env
+          find -ls
+      - name: Run validation
+        run: |
+          ansible-playbook -i inventory --become -vvv mde-verify.yml ${ANSIBLE_EXTRA_VARS}
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
+        continue-on-error: true
+      # https://docs.microsoft.com/en-us/microsoft-365/security/defender-endpoint/linux-install-manually
+      - name: Install MDE without onboarding
+        run: |
+          set -x
+          sudo apt-get install -y curl libplist-utils gpg apt-transport-https
+          curl https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
+          curl -o microsoft.list https://packages.microsoft.com/config/ubuntu/20.04/prod.list
+          cat microsoft.list
+          sudo mv ./microsoft.list /etc/apt/sources.list.d/microsoft-prod.list
+          sudo apt-get update
+          sudo apt-get install -y mdatp
+          mdatp health
+          mdatp connectivity test
+          mdatp definitions update
+      - name: Misc
+        run: |
+          ls -lA /opt/microsoft/mdatp/conf/
+          ls -lA /var/log/microsoft/mdatp/
+          sudo chmod 644 /opt/microsoft/mdatp/conf/mdatp.rules
+      - name: Run validation
+        run: |
+          ansible-playbook -i inventory --become -vvv mde-verify.yml ${ANSIBLE_EXTRA_VARS}
+        env:
+          PY_COLORS: '1'
+          ANSIBLE_FORCE_COLOR: '1'
