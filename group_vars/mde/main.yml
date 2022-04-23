@@ -1,7 +1,9 @@
 ---
 
 mde_org_id: ''
-mde_healthy: true
+# mde_healthy: true
+# set to false as test environment and no license
+mde_healthy: false
 mde_tags: ''
 mde_proxy_host: ''
 mde_proxy_port: ''
