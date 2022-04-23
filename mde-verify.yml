@@ -12,12 +12,12 @@
         mde_log1: '/var/log/microsoft/mdatp/microsoft_defender.log'
         mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
         mde_log3: '/var/log/microsoft/mdatp/microsoft_defender_core_err.log'
-        mde_log_user: root
-      when: ansible_system == "Linux"
-    - name: RedHat7 | Set fact
-      ansible.builtin.set_fact:
         mde_log_user: mdatp
-      when: ansible_os_family == "RedHat" and ansible_distribution_major_version|int == 7
+      when: ansible_system == "Linux"
+    - name: RedHat8 | Set fact
+      ansible.builtin.set_fact:
+        mde_log_user: root
+      when: ansible_os_family == "RedHat" and ansible_distribution_major_version|int == 8
     - name: Darwin | Set fact
       ansible.builtin.set_fact:
         mde_dir: '/opt/microsoft/mdatp'
