@@ -67,9 +67,10 @@ jobs:
           mdatp definitions update || true
       - name: Misc
         run: |
+          set -x
           ls -lA /opt/microsoft/mdatp/conf/
           ls -lA /var/log/microsoft/mdatp/
-          sudo chmod 644 /opt/microsoft/mdatp/conf/mdatp.rules
+          sudo chmod 644 /opt/microsoft/mdatp/conf/mdatp.rules || true
       - name: Run validation
         run: |
           ansible-playbook -i inventory --become -vvv mde-verify.yml ${ANSIBLE_EXTRA_VARS}
