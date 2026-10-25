@@ -13,6 +13,7 @@
         mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
         mde_log3: '/var/log/microsoft/mdatp/microsoft_defender_core_err.log'
         mde_log_user: mdatp
+        mde_mdatp_auditd: false
       when: ansible_facts.system == "Linux"
     - name: RedHat8 | Set fact
       ansible.builtin.set_fact:
@@ -76,44 +77,47 @@
             - ansible_facts.os_family == "RedHat"
             - mde_selinux is not defined or mde_selinux|bool
 
-        - name: Configuration | Linux | Get mdatp auditd rules stats
-          ansible.builtin.stat:
-            path: /opt/microsoft/mdatp/conf/mdatp.rules
-          register: s_mdatp_rules
-          failed_when: false
-        - name: Configuration | Linux | Ensure mdatp audit rules file exists
-          ansible.builtin.assert:
-            that:
-              - s_mdatp_rules.stat.exists
-              - s_mdatp_rules.stat.mode == '0644'
-              - s_mdatp_rules.stat.pw_name == 'root'
+        - name: Auditd
+          when: mde_mdatp_auditd | bool
+          block:
+            - name: Configuration | Linux | Get mdatp auditd rules stats
+              ansible.builtin.stat:
+                path: /opt/microsoft/mdatp/conf/mdatp.rules
+              register: s_mdatp_rules
+              failed_when: false
+            - name: Configuration | Linux | Ensure mdatp audit rules file exists
+              ansible.builtin.assert:
+                that:
+                  - s_mdatp_rules.stat.exists
+                  - s_mdatp_rules.stat.mode == '0644'
+                  - s_mdatp_rules.stat.pw_name == 'root'
 
-        - name: Configuration | Linux | Get mdatp auditd rules
-          ansible.builtin.command: cat /opt/microsoft/mdatp/conf/mdatp.rules
-          register: mdatp_rules
-          changed_when: false
-          failed_when: false
-        - name: Configuration | Linux | Validate mdatp auditd rules
-          ansible.builtin.assert:
-            that:
-              - "'Auditd rules for MDATP (EDR) audisp sensor' in mdatp_rules.stdout"
-              - "'-k mdatp' in mdatp_rules.stdout"
-              - "'-k mdatpmbr' in mdatp_rules.stdout"
-              - "'Error' not in mdatp_rules.stdout"
-              - not mdatp_rules.stderr|string
+            - name: Configuration | Linux | Get mdatp auditd rules
+              ansible.builtin.command: cat /opt/microsoft/mdatp/conf/mdatp.rules
+              register: mdatp_rules
+              changed_when: false
+              failed_when: false
+            - name: Configuration | Linux | Validate mdatp auditd rules
+              ansible.builtin.assert:
+                that:
+                  - "'Auditd rules for MDATP (EDR) audisp sensor' in mdatp_rules.stdout"
+                  - "'-k mdatp' in mdatp_rules.stdout"
+                  - "'-k mdatpmbr' in mdatp_rules.stdout"
+                  - "'Error' not in mdatp_rules.stdout"
+                  - not mdatp_rules.stderr|string
 
-        - name: Configuration | Linux | Get auditd active rules
-          ansible.builtin.command: auditctl -l
-          register: auditctl
-          changed_when: false
-          failed_when: false
-          become: true
-        - name: Configuration | Linux | Validate auditd active rules include mdatp
-          ansible.builtin.assert:
-            that:
-              - "'key=mdatp' in auditctl.stdout"
-              - "'Error' not in auditctl.stdout"
-              - not auditctl.stderr|string
+            - name: Configuration | Linux | Get auditd active rules
+              ansible.builtin.command: auditctl -l
+              register: auditctl
+              changed_when: false
+              failed_when: false
+              become: true
+            - name: Configuration | Linux | Validate auditd active rules include mdatp
+              ansible.builtin.assert:
+                that:
+                  - "'key=mdatp' in auditctl.stdout"
+                  - "'Error' not in auditctl.stdout"
+                  - not auditctl.stderr|string
 
         - name: Logs | Linux | Get microsoft_defender_core_err.log
           ansible.builtin.stat:
