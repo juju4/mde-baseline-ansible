@@ -13,11 +13,11 @@
         mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
         mde_log3: '/var/log/microsoft/mdatp/microsoft_defender_core_err.log'
         mde_log_user: mdatp
-      when: ansible_system == "Linux"
+      when: ansible_facts.system == "Linux"
     - name: RedHat8 | Set fact
       ansible.builtin.set_fact:
         mde_log_user: root
-      when: ansible_os_family == "RedHat" and ansible_distribution_major_version | int == 8
+      when: ansible_facts.os_family == "RedHat" and ansible_facts.distribution_major_version | int == 8
     - name: Darwin | Set fact
       ansible.builtin.set_fact:
         mde_dir: '/opt/microsoft/mdatp'
@@ -26,15 +26,15 @@
         mde_log1: '/var/log/microsoft/mdatp/microsoft_defender.log'
         mde_log2: '/var/log/microsoft/mdatp/microsoft_defender_core.log'
         mde_log_user: root
-      when: ansible_os_family == "Darwin"
+      when: ansible_facts.os_family == "Darwin"
     - name: Windows | Set fact
       ansible.builtin.set_fact:
         mde_dir: 'C:\Program Files\Windows Defender Advanced Threat Protection'
         mde_bin: 'C:\Program Files\Windows Defender Advanced Threat Protection\MsSense.exe'
-      when: ansible_os_family == "Windows"
+      when: ansible_facts.os_family == "Windows"
   tasks:
     - name: Linux
-      when: ansible_system == "Linux"
+      when: ansible_facts.system == "Linux"
       block:
         - name: Collect packages information
           ansible.builtin.package_facts:
@@ -73,7 +73,7 @@
               - "'Error' not in selinux.stdout"
               - not selinux.stderr|string
           when:
-            - ansible_os_family == "RedHat"
+            - ansible_facts.os_family == "RedHat"
             - mde_selinux is not defined or mde_selinux|bool
 
         - name: Configuration | Linux | Get mdatp auditd rules stats
@@ -145,7 +145,7 @@
               - not log3.stderr|string
 
     - name: Linux+Macos
-      when: ansible_system == "Linux" or ansible_os_family == "Darwin"
+      when: ansible_facts.system == "Linux" or ansible_facts.os_family == "Darwin"
       block:
         - name: Get directory stats
           ansible.builtin.stat:
@@ -232,7 +232,7 @@
               - s_managed_json.stat.mode == '0644'
               - s_managed_json.stat.pw_name == 'root'
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_tags|string or mde_proxy_host|string or mde_managed|bool
 
         - name: Configuration | Linux | Check managed json is valid json
@@ -246,7 +246,7 @@
               - "'Error' not in managed_json_valid.stdout"
               - not managed_json_valid.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_tags|string or mde_proxy_host|string or mde_managed|bool
 
         - name: Configuration | Linux | Get managed json file
@@ -262,7 +262,7 @@
               - "'Error' not in managed_json.stdout"
               - not managed_json.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_tags|string
 
         - name: Configuration | Linux | Validate proxy
@@ -272,7 +272,7 @@
               - "'Error' not in managed_json.stdout"
               - not managed_json.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_proxy_host|string
             - mde_proxy_port|string
 
@@ -289,7 +289,7 @@
               - "'Error' not in systemd.stdout"
               - not systemd.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_proxy_host|string
             - mde_proxy_port|string
 
@@ -306,7 +306,7 @@
               - "'Could not connect to the daemon' not in health1.stdout"
               - not health1.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_managed|bool
 
         - name: Configuration | Check if passive mode is set at expected value
@@ -316,7 +316,7 @@
               - "'Error' not in health1.stdout"
               - not health1.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
 
         - name: Configuration | Get mdatp health boolean
           ansible.builtin.command: mdatp health --field healthy
@@ -330,7 +330,7 @@
               - "'Error' not in health2.stdout"
               - not health2.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
             - mde_healthy
 
         - name: Health | Check if healthy2
@@ -362,7 +362,7 @@
               - "'Error' not in net.stdout"
               - not net.stderr|string
           when:
-            - ansible_system == "Linux"
+            - ansible_facts.system == "Linux"
 
         - name: Logs | Get microsoft_defender.log
           ansible.builtin.stat:
@@ -388,10 +388,10 @@
               - s_log2.stat.mode == '0660'
               - s_log2.stat.pw_name == 'root'
               # last modified time less than 15min old
-              - (s_log2.stat.mtime|int - (ansible_date_time.epoch|int - 900)) > 0
+              - (s_log2.stat.mtime|int - (ansible_facts.date_time.epoch|int - 900)) > 0
 
     - name: Windows
-      when: ansible_os_family == "Windows"
+      when: ansible_facts.os_family == "Windows"
       block:
         - name: Win | Get directory stats
           ansible.windows.win_stat:
