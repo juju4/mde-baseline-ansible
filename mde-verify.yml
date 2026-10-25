@@ -17,7 +17,7 @@
     - name: RedHat8 | Set fact
       ansible.builtin.set_fact:
         mde_log_user: root
-      when: ansible_os_family == "RedHat" and ansible_distribution_major_version|int == 8
+      when: ansible_os_family == "RedHat" and ansible_distribution_major_version | int == 8
     - name: Darwin | Set fact
       ansible.builtin.set_fact:
         mde_dir: '/opt/microsoft/mdatp'
@@ -33,7 +33,9 @@
         mde_bin: 'C:\Program Files\Windows Defender Advanced Threat Protection\MsSense.exe'
       when: ansible_os_family == "Windows"
   tasks:
-    - block:
+    - name: Linux
+      when: ansible_system == "Linux"
+      block:
         - name: Collect packages information
           ansible.builtin.package_facts:
             manager: auto
@@ -142,9 +144,9 @@
               # - "'[warning]: [event<ipc_filesystem_message, EdrOpenMessages>]: Dropped messages: ' not in log3.stdout"
               - not log3.stderr|string
 
-      when: ansible_system == "Linux"
-
-    - block:
+    - name: Linux+Macos
+      when: ansible_system == "Linux" or ansible_os_family == "Darwin"
+      block:
         - name: Get directory stats
           ansible.builtin.stat:
             path: "{{ mde_dir }}"
@@ -215,8 +217,8 @@
             that:
               - mde_org_id in org_id.stdout
               - "'Error' not in org_id.stdout"
-              - not org_id.stderr|string
-          when: mde_org_id|string
+              - not org_id.stderr | string
+          when: mde_org_id | string
 
         - name: Configuration | Linux | Get managed json stats
           ansible.builtin.stat:
@@ -388,8 +390,9 @@
               # last modified time less than 15min old
               - (s_log2.stat.mtime|int - (ansible_date_time.epoch|int - 900)) > 0
 
-      when: ansible_system == "Linux" or ansible_os_family == "Darwin"
-    - block:
+    - name: Windows
+      when: ansible_os_family == "Windows"
+      block:
         - name: Win | Get directory stats
           ansible.windows.win_stat:
             path: "{{ mde_dir }}"
@@ -474,5 +477,3 @@
               - r_passive.value == '1'
           when:
             - mde_passive_mode_enabled|bool
-
-      when: ansible_os_family == "Windows"
