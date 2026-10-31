@@ -128,8 +128,8 @@
           ansible.builtin.assert:
             that:
               - s_log3.stat.exists
-              - s_log3.stat.mode == '0660'
-              - s_log3.stat.pw_name == 'root'
+              - s_log3.stat.mode == '0640'
+              - s_log3.stat.pw_name == 'mdatp'
 
         - name: Logs | Linux | Get microsoft_defender_core_err.log content
           ansible.builtin.command: "cat {{ mde_log3 }}"
