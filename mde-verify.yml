@@ -252,7 +252,7 @@
               - s_managed_json.stat.pw_name == 'root'
           when:
             - ansible_facts.system == "Linux"
-            - mde_tags|string or mde_proxy_host|string or mde_managed|bool
+            - mde_tags|length > 0 or mde_proxy_host|length > 0 or mde_managed|bool
 
         - name: Configuration | Linux | Check managed json is valid json
           ansible.builtin.command: python -m json.tool /etc/opt/microsoft/mdatp/managed/mdatp_managed.json
@@ -266,7 +266,7 @@
               - not managed_json_valid.stderr|string
           when:
             - ansible_facts.system == "Linux"
-            - mde_tags|string or mde_proxy_host|string or mde_managed|bool
+            - mde_tags|length > 0 or mde_proxy_host|length > 0 or mde_managed|bool
 
         - name: Configuration | Linux | Get managed json file
           ansible.builtin.command: cat /etc/opt/microsoft/mdatp/managed/mdatp_managed.json
@@ -282,7 +282,7 @@
               - not managed_json.stderr|string
           when:
             - ansible_facts.system == "Linux"
-            - mde_tags|string
+            - mde_tags|length > 0
 
         - name: Configuration | Linux | Validate proxy
           ansible.builtin.assert:
