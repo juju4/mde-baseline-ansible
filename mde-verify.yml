@@ -14,6 +14,9 @@
         mde_log3: '/var/log/microsoft/mdatp/microsoft_defender_core_err.log'
         mde_log_user: mdatp
         mde_mdatp_auditd: false
+        # unlicense check
+        mde_passive_mode_enabled: true
+        mde_healthy: false
       when: ansible_facts.system == "Linux"
     - name: RedHat8 | Set fact
       ansible.builtin.set_fact:
