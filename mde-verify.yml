@@ -236,7 +236,8 @@
               - mde_org_id in org_id.stdout
               - "'Error' not in org_id.stdout"
               - not org_id.stderr | string
-          when: mde_org_id | string
+          when:
+            - mde_org_id | length > 0
 
         - name: Configuration | Linux | Get managed json stats
           ansible.builtin.stat:
