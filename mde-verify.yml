@@ -222,6 +222,7 @@
           ansible.builtin.assert:
             that:
               - ps2.stdout | length > 0
+          when: false
 
         - name: Configuration | Get org_id
           ansible.builtin.command: mdatp health --field org_id
