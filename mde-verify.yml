@@ -395,8 +395,9 @@
           ansible.builtin.assert:
             that:
               - s_log1.stat.exists
-              - s_log1.stat.mode == '0660'
+              - s_log1.stat.mode == '0640'
               - s_log1.stat.pw_name == mde_log_user
+              - s_log1.stat.gr_name == mde_log_user
 
         - name: Logs | Get microsoft_defender_core.log
           ansible.builtin.stat:
