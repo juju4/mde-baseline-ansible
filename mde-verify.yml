@@ -408,7 +408,7 @@
           ansible.builtin.assert:
             that:
               - s_log2.stat.exists
-              - s_log2.stat.mode == '0660'
+              - s_log2.stat.mode == '0640'
               - s_log2.stat.pw_name == 'root'
               # last modified time less than 15min old
               - (s_log2.stat.mtime|int - (ansible_facts.date_time.epoch|int - 900)) > 0
