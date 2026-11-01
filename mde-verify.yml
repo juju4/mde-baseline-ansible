@@ -171,6 +171,7 @@
               - s_mdatp_bin.stat.exists
               - s_mdatp_bin.stat.mode == '0755'
               - s_mdatp_bin.stat.pw_name == 'root'
+              - s_mdatp_bin.stat.gr_name == 'root'
 
         - name: Get mdatp daemon stats
           ansible.builtin.stat:
@@ -180,8 +181,9 @@
           ansible.builtin.assert:
             that:
               - s_mde_bin.stat.exists
-              - s_mde_bin.stat.mode == '0755'
+              - s_mde_bin.stat.mode == '0754'
               - s_mde_bin.stat.pw_name == 'root'
+              - s_mde_bin.stat.gr_name == 'root'
 
         - name: Populate service facts
           ansible.builtin.service_facts:
