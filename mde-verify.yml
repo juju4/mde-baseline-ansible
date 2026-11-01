@@ -201,7 +201,8 @@
           failed_when: false
         - name: Validate wdavdaemon(root) process is running
           ansible.builtin.assert:
-            that: ps1.stdout
+            that:
+              - ps1.stdout | length > 0
 
         - name: Get wdavdaemon(mdatp) process
           ansible.builtin.command: pgrep -u mdatp wdavdaemon
@@ -210,7 +211,8 @@
           failed_when: false
         - name: Validate wdavdaemon(mdatp) process is running
           ansible.builtin.assert:
-            that: ps2.stdout
+            that:
+              - ps2.stdout | length > 0
 
         - name: Configuration | Get org_id
           ansible.builtin.command: mdatp health --field org_id
@@ -279,8 +281,8 @@
               - not managed_json.stderr|string
           when:
             - ansible_facts.system == "Linux"
-            - mde_proxy_host|string
-            - mde_proxy_port|string
+            - mde_proxy_host|length > 0
+            - mde_proxy_port|length > 0
 
         - name: Configuration | Linux | Get systemd unit file
           ansible.builtin.command: cat /usr/lib/systemd/system/mdatp.service
@@ -296,8 +298,8 @@
               - not systemd.stderr|string
           when:
             - ansible_facts.system == "Linux"
-            - mde_proxy_host|string
-            - mde_proxy_port|string
+            - mde_proxy_host|length > 0
+            - mde_proxy_port|length > 0
 
         - name: Configuration | Get mdatp health
           ansible.builtin.command: mdatp health
@@ -456,7 +458,7 @@
             that:
               - "mde_org_id in r_onboarding_info.value"
           when:
-            - mde_org_id|string
+            - mde_org_id|length > 0
 
         - name: Configuration | MDE Tags
           ansible.windows.win_reg_stat:
@@ -469,7 +471,7 @@
             that:
               - "mde_tags in r_group.value"
           when:
-            - mde_tags|string
+            - mde_tags|length > 0
 
         - name: Configuration | MDE Passive mode
           ansible.windows.win_reg_stat:
