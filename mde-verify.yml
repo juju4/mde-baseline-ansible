@@ -194,6 +194,15 @@
               - ansible_facts.services['mdatp.service']['state'] == 'running'
               - ansible_facts.services['mdatp.service']['status'] == 'enabled'
 
+        - name: Check all processes
+          ansible.builtin.command: ps aux
+          changed_when: false
+          register: psa
+        - name: Debug | ps aux output
+          ansible.builtin.debug:
+            var: psa
+            verbosity: 1
+
         - name: Get wdavdaemon(root) process
           ansible.builtin.command: pgrep -u root wdavdaemon
           register: ps1
